@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"golang.org/x/exp/slices"
 	"io"
 	"os"
 	"os/exec"
@@ -25,7 +26,10 @@ func main() {
 		panic(err)
 	}
 
-	//fmt.Println(string(contents))
+	expr1 := regexp.MustCompile("(?s)```result.*?```\n")
+	contents = expr1.ReplaceAll(contents, []byte(""))
+
+	fmt.Println(string(contents))
 
 	expr := regexp.MustCompile("(?s)```go(.*?)```")
 
@@ -33,14 +37,11 @@ func main() {
 		codeSegment := contents[segment[2]:segment[3]]
 		fmt.Printf("%q\n", codeSegment)
 		results := CalcResults(codeSegment)
-		fmtResults := []byte(fmt.Sprintf("\n```shell\n%s```", string(results)))
+		fmtResults := []byte(fmt.Sprintf("\n```result\n%s```", string(results)))
 
-		newContents := make([]byte, len(contents)+len(fmtResults))
-		copy(newContents, contents[:segment[1]])
-		copy(newContents[segment[1]:segment[1]+len(fmtResults)], fmtResults)
-		copy(newContents[segment[1]+len(fmtResults):], contents[segment[1]:])
+		contents = slices.Insert(contents, segment[1], fmtResults...)
 
-		err = os.WriteFile(*mdFile, newContents, 0644)
+		err = os.WriteFile(*mdFile, contents, 0644)
 		if err != nil {
 			panic(err)
 		}
@@ -62,7 +63,7 @@ func CalcResults(code []byte) []byte {
 	result, err := cmd.Output()
 	if err != nil {
 		fmt.Printf("%s\n", err)
-		return ([]byte(err.Error()))
+		return []byte(err.Error())
 	}
-	return (result)
+	return result
 }

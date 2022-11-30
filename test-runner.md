@@ -10,7 +10,7 @@ func main() {
 }
 
 ```
-```shell
+```result
 from doc
 ```
 after
