@@ -12,6 +12,11 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+var (
+	oldResultReplaceExpr = regexp.MustCompile("(?s)```result\n.*?```\n")
+	goCodeExtractorExpr  = regexp.MustCompile("(?s)```go\n(.*?)```")
+)
+
 func main() {
 	mdFile := flag.String("mdfile", "", "Path to markdown file")
 	flag.Parse()
@@ -27,20 +32,20 @@ func main() {
 		panic(err)
 	}
 
-	expr1 := regexp.MustCompile("(?s)```result\n.*?```\n")
-	contents = expr1.ReplaceAll(contents, []byte(""))
+	contents = oldResultReplaceExpr.ReplaceAll(contents, []byte(""))
 
-	fmt.Println(string(contents))
-
-	expr := regexp.MustCompile("(?s)```go\n(.*?)```")
-
-	codeSegments := expr.FindAllSubmatchIndex(contents, 100)
+	codeSegments := goCodeExtractorExpr.FindAllSubmatchIndex(contents, 100)
 
 	for i := 0; i < len(codeSegments); i++ {
 		segment := codeSegments[i]
 
 		codeSegment := contents[segment[2]:segment[3]]
-		fmt.Printf("%q\n", codeSegment)
+
+		isComplete := CheckIsCompleteCode(codeSegment)
+		if !isComplete {
+			codeSegment = GetCompleteCode(codeSegment)
+		}
+
 		newContents, results := CalcResults(codeSegment)
 		resultsStr := EnsureNewLineEnding(string(results))
 		fmtResults := []byte(fmt.Sprintf("\n```result\n%s```", resultsStr))
@@ -56,7 +61,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		codeSegments = expr.FindAllSubmatchIndex(contents, 100)
+		codeSegments = goCodeExtractorExpr.FindAllSubmatchIndex(contents, 100)
 	}
 }
 
@@ -91,4 +96,27 @@ func EnsureNewLineEnding(s string) string {
 		return s
 	}
 	return s + "\n"
+}
+
+func CheckIsCompleteCode(code []byte) bool {
+	c := string(code)
+	c = strings.TrimSpace(c)
+	return strings.HasPrefix(c, "package main")
+}
+
+func GetCompleteCode(baseCode []byte) []byte {
+	base := `
+package main
+import (
+"fmt"
+"sort"
+)
+
+func main() {
+	%s
+}
+
+`
+	code := fmt.Sprintf(base, baseCode)
+	return []byte(code)
 }
