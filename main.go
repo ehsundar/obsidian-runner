@@ -51,7 +51,9 @@ func main() {
 		fmtResults := []byte(fmt.Sprintf("\n```result\n%s```", resultsStr))
 
 		contents = slices.Insert(contents, segment[1], fmtResults...)
-		contents = slices.Replace(contents, segment[2], segment[3], newContents...)
+		if isComplete {
+			contents = slices.Replace(contents, segment[2], segment[3], newContents...)
+		}
 
 		err = os.WriteFile(*mdFile, contents, 0644)
 		if err != nil {
@@ -75,6 +77,7 @@ func CalcResults(code []byte) ([]byte, []byte) {
 		os.Remove("prog.go")
 	}()
 
+	exec.Command("goimports", "-w", "prog.go").Run()
 	exec.Command("gofmt", "-w", "prog.go").Run()
 
 	newContents, err := os.ReadFile("prog.go")
@@ -83,7 +86,7 @@ func CalcResults(code []byte) ([]byte, []byte) {
 	}
 
 	cmd := exec.Command("go", "run", "prog.go")
-	result, err := cmd.Output()
+	result, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Printf("%s\n", err)
 		return newContents, []byte(err.Error())

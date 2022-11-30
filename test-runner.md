@@ -13,13 +13,9 @@ from doc
 ```
 after
 ```go
-package main
 
-import "fmt"
+fmt.Println("second one")
 
-func main() {
-	fmt.Println("second one")
-}
 ```
 ```result
 second one
