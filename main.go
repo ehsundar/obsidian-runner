@@ -3,18 +3,19 @@ package main
 import (
 	"flag"
 	"fmt"
-	"golang.org/x/exp/slices"
 	"io"
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
+
+	"golang.org/x/exp/slices"
 )
 
 func main() {
 	mdFile := flag.String("mdfile", "", "Path to markdown file")
 	flag.Parse()
 
-	//fmt.Println(*mdFile)
 	f, err := os.Open(*mdFile)
 
 	if err != nil {
@@ -26,30 +27,40 @@ func main() {
 		panic(err)
 	}
 
-	expr1 := regexp.MustCompile("(?s)```result.*?```\n")
+	expr1 := regexp.MustCompile("(?s)```result\n.*?```\n")
 	contents = expr1.ReplaceAll(contents, []byte(""))
 
 	fmt.Println(string(contents))
 
-	expr := regexp.MustCompile("(?s)```go(.*?)```")
+	expr := regexp.MustCompile("(?s)```go\n(.*?)```")
 
-	for _, segment := range expr.FindAllSubmatchIndex(contents, 100) {
+	codeSegments := expr.FindAllSubmatchIndex(contents, 100)
+
+	for i := 0; i < len(codeSegments); i++ {
+		segment := codeSegments[i]
+
 		codeSegment := contents[segment[2]:segment[3]]
 		fmt.Printf("%q\n", codeSegment)
-		results := CalcResults(codeSegment)
-		fmtResults := []byte(fmt.Sprintf("\n```result\n%s```", string(results)))
+		newContents, results := CalcResults(codeSegment)
+		resultsStr := EnsureNewLineEnding(string(results))
+		fmtResults := []byte(fmt.Sprintf("\n```result\n%s```", resultsStr))
 
 		contents = slices.Insert(contents, segment[1], fmtResults...)
+		contents = slices.Replace(contents, segment[2], segment[3], newContents...)
 
 		err = os.WriteFile(*mdFile, contents, 0644)
 		if err != nil {
 			panic(err)
 		}
-		break
+		contents, err = os.ReadFile(*mdFile)
+		if err != nil {
+			panic(err)
+		}
+		codeSegments = expr.FindAllSubmatchIndex(contents, 100)
 	}
 }
 
-func CalcResults(code []byte) []byte {
+func CalcResults(code []byte) ([]byte, []byte) {
 	err := os.WriteFile("prog.go", code, 0644)
 	if err != nil {
 		panic(err)
@@ -59,11 +70,25 @@ func CalcResults(code []byte) []byte {
 		os.Remove("prog.go")
 	}()
 
+	exec.Command("gofmt", "-w", "prog.go").Run()
+
+	newContents, err := os.ReadFile("prog.go")
+	if err != nil {
+		panic(err)
+	}
+
 	cmd := exec.Command("go", "run", "prog.go")
 	result, err := cmd.Output()
 	if err != nil {
 		fmt.Printf("%s\n", err)
-		return []byte(err.Error())
+		return newContents, []byte(err.Error())
 	}
-	return result
+	return newContents, result
+}
+
+func EnsureNewLineEnding(s string) string {
+	if strings.HasSuffix(s, "\n") {
+		return s
+	}
+	return s + "\n"
 }

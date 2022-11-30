@@ -1,6 +1,5 @@
 before
 ```go
-
 package main
 
 import "fmt"
@@ -8,7 +7,6 @@ import "fmt"
 func main() {
 	fmt.Println("from doc")
 }
-
 ```
 ```result
 from doc
@@ -22,6 +20,9 @@ import "fmt"
 func main() {
 	fmt.Println("second one")
 }
+```
+```result
+second one
 ```
 
 footnotes
